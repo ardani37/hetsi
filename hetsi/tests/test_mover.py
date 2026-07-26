@@ -1,5 +1,6 @@
 # hetsi/tests/test_mover.py
 import os
+import pytest
 from hetsi.core import mover
 
 
@@ -42,3 +43,30 @@ def test_copier_renvoie_un_message(tmp_path):
     res = mover.copier(str(src), str(tmp_path / "dst"))
     assert res.succes is True
     assert res.message.strip() != ""
+
+
+def test_creer_puis_supprimer_jonction(tmp_path):
+    cible = tmp_path / "cible"
+    cible.mkdir()
+    (cible / "a.txt").write_bytes(b"data")
+    lien = tmp_path / "lien"
+
+    mover.creer_jonction(str(lien), str(cible))
+    assert mover.est_jonction(str(lien)) is True
+    # Le contenu est visible à travers la jonction
+    assert (lien / "a.txt").read_bytes() == b"data"
+
+    mover.supprimer_jonction(str(lien))
+    assert not os.path.exists(str(lien))
+    # La cible et son contenu sont intacts
+    assert (cible / "a.txt").read_bytes() == b"data"
+
+
+def test_supprimer_jonction_refuse_dossier_normal(tmp_path):
+    normal = tmp_path / "normal"
+    normal.mkdir()
+    (normal / "important.txt").write_bytes(b"ne pas perdre")
+    with pytest.raises(ValueError):
+        mover.supprimer_jonction(str(normal))
+    # Rien n'a été supprimé
+    assert (normal / "important.txt").exists()

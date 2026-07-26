@@ -21,6 +21,30 @@ def est_jonction(chemin):
         return False
 
 
+def creer_jonction(lien, cible):
+    """Crée une jonction `lien` -> `cible` (mklink /J)."""
+    proc = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", lien, cible],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"mklink a échoué : {proc.stderr or proc.stdout}")
+
+
+def supprimer_jonction(lien):
+    """Supprime UNIQUEMENT le lien de jonction, jamais son contenu."""
+    if not est_jonction(lien):
+        raise ValueError(
+            f"'{lien}' n'est pas une jonction ; suppression refusée par sécurité."
+        )
+    proc = subprocess.run(
+        ["cmd", "/c", "rmdir", lien],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"rmdir a échoué : {proc.stderr or proc.stdout}")
+
+
 def copier(source, destination):
     """Copie source -> destination via robocopy, sans supprimer la source."""
     args = [
