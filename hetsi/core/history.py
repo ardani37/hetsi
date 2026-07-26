@@ -51,6 +51,13 @@ class Historique:
         _dire("Recopie vers l'emplacement d'origine…")
         res = mover.copier(destination, source)
         if not res.succes:
+            # robocopy a pu laisser un dossier partiel a `source` ; mklink /J
+            # echoue si le chemin du lien existe deja, donc on nettoie d'abord.
+            if os.path.exists(source):
+                try:
+                    mover._supprimer_arbre(source)
+                except OSError:
+                    pass
             # Recrée la jonction pour ne pas laisser un état cassé
             mover.creer_jonction(source, destination)
             raise mover.ErreurDeplacement(

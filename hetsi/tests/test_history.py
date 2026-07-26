@@ -1,5 +1,6 @@
 import json
 import os
+import pytest
 from hetsi.core import mover
 from hetsi.core.history import Historique
 
@@ -40,3 +41,28 @@ def test_annuler_restaure_le_dossier(tmp_path):
     assert not os.path.exists(str(dst))
     # L'entrée d'historique a été retirée
     assert h.entrees() == []
+
+
+def test_annuler_recopie_echoue_conserve_entree(tmp_path, monkeypatch):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "bin.exe").write_bytes(b"programme")
+    dst = tmp_path / "cible" / "app"
+    mover.deplacer(str(src), str(dst))
+    assert mover.est_jonction(str(src)) is True
+
+    h = Historique(str(tmp_path / "history.json"))
+    h.ajouter(str(src), str(dst), 9, "2026-07-26 10:00")
+
+    def faux_copier(source, destination):
+        # robocopy laisse un dossier partiel a l'emplacement cible (= source ici)
+        os.makedirs(destination, exist_ok=True)
+        with open(os.path.join(destination, "partiel.tmp"), "wb") as f:
+            f.write(b"incomplet")
+        return mover.ResultatCopie(succes=False, code=8, message="echec simule")
+    monkeypatch.setattr(mover, "copier", faux_copier)
+
+    with pytest.raises(mover.ErreurDeplacement):
+        h.annuler(0)
+
+    assert len(h.entrees()) == 1              # entree conservee
+    assert mover.est_jonction(str(src)) is True  # jonction retablie
