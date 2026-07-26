@@ -25,7 +25,7 @@ def creer_jonction(lien, cible):
     """Crée une jonction `lien` -> `cible` (mklink /J)."""
     proc = subprocess.run(
         ["cmd", "/c", "mklink", "/J", lien, cible],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="oem", errors="replace",
     )
     if proc.returncode != 0:
         raise RuntimeError(f"mklink a échoué : {proc.stderr or proc.stdout}")
@@ -39,7 +39,7 @@ def supprimer_jonction(lien):
         )
     proc = subprocess.run(
         ["cmd", "/c", "rmdir", lien],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="oem", errors="replace",
     )
     if proc.returncode != 0:
         raise RuntimeError(f"rmdir a échoué : {proc.stderr or proc.stdout}")
