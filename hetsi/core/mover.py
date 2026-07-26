@@ -27,7 +27,7 @@ def copier(source, destination):
         "robocopy", source, destination,
         "/E", "/COPY:DATS", "/DCOPY:DAT", "/R:1", "/W:1",
     ]
-    proc = subprocess.run(args, capture_output=True, text=True)
+    proc = subprocess.run(args, capture_output=True, text=True, encoding="oem", errors="replace")
     code = proc.returncode
     succes = code < 8
     return ResultatCopie(succes=succes, code=code, message=proc.stdout)
