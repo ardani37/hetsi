@@ -1,8 +1,22 @@
 # hetsi/core/diskinfo.py
 """Tailles de dossiers, espace disque et liste des lecteurs."""
+import ctypes
 import os
 import shutil
+import stat
 import string
+
+DRIVE_FIXED = 3
+
+
+def _est_point_reparse(chemin):
+    """Vrai si `chemin` est un point de reparse (jonction ou lien symbolique)."""
+    try:
+        infos = os.stat(chemin, follow_symlinks=False)
+    except OSError:
+        return False
+    attributs = getattr(infos, "st_file_attributes", 0)
+    return bool(attributs & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
 def taille_dossier(chemin):
@@ -10,7 +24,7 @@ def taille_dossier(chemin):
     total = 0
     for racine, dirs, fichiers in os.walk(chemin):
         # Ne pas descendre dans les points de reparse (jonctions/symlinks)
-        dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(racine, d))]
+        dirs[:] = [d for d in dirs if not _est_point_reparse(os.path.join(racine, d))]
         for f in fichiers:
             chemin_f = os.path.join(racine, f)
             try:
@@ -36,6 +50,6 @@ def lecteurs_disponibles():
     trouves = []
     for lettre in string.ascii_uppercase:
         racine = f"{lettre}:\\"
-        if os.path.exists(racine):
+        if os.path.exists(racine) and ctypes.windll.kernel32.GetDriveTypeW(racine) == DRIVE_FIXED:
             trouves.append(racine)
     return trouves
