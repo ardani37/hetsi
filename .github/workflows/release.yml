@@ -18,9 +18,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Installer les dépendances
-        run: py -m pip install pyinstaller
+        run: python -m pip install pyinstaller
       - name: Construire l'exe
-        run: py -m PyInstaller --onefile --windowed --name hetsi main.py
+        run: python -m PyInstaller --onefile --windowed --name hetsi main.py
       - name: Publier la Release
         uses: softprops/action-gh-release@v2
         with:
