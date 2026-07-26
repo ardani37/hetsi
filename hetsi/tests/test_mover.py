@@ -1,5 +1,6 @@
 # hetsi/tests/test_mover.py
 import os
+import stat
 import pytest
 from hetsi.core import mover
 
@@ -70,3 +71,59 @@ def test_supprimer_jonction_refuse_dossier_normal(tmp_path):
         mover.supprimer_jonction(str(normal))
     # Rien n'a été supprimé
     assert (normal / "important.txt").exists()
+
+
+def test_valider_refuse_source_absente(tmp_path):
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(tmp_path / "inexistant"), str(tmp_path / "dst"))
+
+
+def test_valider_refuse_destination_existante(tmp_path):
+    src = tmp_path / "src"; src.mkdir()
+    dst = tmp_path / "dst"; dst.mkdir()
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(dst))
+
+
+def test_valider_refuse_source_deja_jonction(tmp_path):
+    cible = tmp_path / "cible"; cible.mkdir()
+    lien = tmp_path / "lien"
+    mover.creer_jonction(str(lien), str(cible))
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(lien), str(tmp_path / "dst"))
+
+
+def test_deplacer_complet(tmp_path):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "bin.exe").write_bytes(b"programme")
+    dst = tmp_path / "autre" / "app"
+
+    mover.deplacer(str(src), str(dst))
+
+    # Contenu déplacé sur la cible
+    assert (dst / "bin.exe").read_bytes() == b"programme"
+    # Source est maintenant une jonction
+    assert mover.est_jonction(str(src)) is True
+    # Le programme reste accessible via l'ancien chemin
+    assert (src / "bin.exe").read_bytes() == b"programme"
+
+
+def test_deplacer_avec_fichier_lecture_seule(tmp_path):
+    src = tmp_path / "app"; src.mkdir()
+    fichier = src / "readonly.dat"
+    fichier.write_bytes(b"protege")
+    os.chmod(str(fichier), stat.S_IREAD)
+    dst = tmp_path / "autre" / "app"
+
+    try:
+        mover.deplacer(str(src), str(dst))
+
+        # Déplacement réussi malgré le fichier en lecture seule
+        assert mover.est_jonction(str(src)) is True
+        assert (dst / "readonly.dat").read_bytes() == b"protege"
+        assert (src / "readonly.dat").read_bytes() == b"protege"
+    finally:
+        # Nettoyage : rétablir les droits d'écriture pour permettre la suppression par pytest
+        cible = dst / "readonly.dat"
+        if cible.exists():
+            os.chmod(str(cible), stat.S_IWRITE)
