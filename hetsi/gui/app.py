@@ -33,12 +33,11 @@ class App(tk.Tk):
         ttk.Label(cadre_haut, textvariable=self.var_source, width=60,
                   anchor="w").grid(row=0, column=1, columnspan=3, sticky="w")
 
-        ttk.Label(cadre_haut, text="Lecteur cible :").grid(row=1, column=0, padx=5)
         self.var_cible = tk.StringVar()
-        self.combo_cible = ttk.Combobox(cadre_haut, textvariable=self.var_cible,
-                                        values=diskinfo.lecteurs_disponibles(),
-                                        state="readonly", width=8)
-        self.combo_cible.grid(row=1, column=1, sticky="w")
+        ttk.Button(cadre_haut, text="Choisir le dossier cible…",
+                   command=self._choisir_cible).grid(row=1, column=0, padx=5, pady=5)
+        ttk.Label(cadre_haut, textvariable=self.var_cible, width=60,
+                  anchor="w").grid(row=1, column=1, columnspan=2, sticky="w")
 
         self.var_apercu = tk.StringVar(value="")
         ttk.Label(cadre_haut, textvariable=self.var_apercu,
@@ -83,28 +82,46 @@ class App(tk.Tk):
         dossier = filedialog.askdirectory(title="Choisir le dossier à déplacer")
         if not dossier:
             return
-        dossier = os.path.normpath(dossier)
-        self.var_source.set(dossier)
-        taille = diskinfo.taille_dossier(dossier)
-        cible = self.var_cible.get() or (diskinfo.lecteurs_disponibles() or [""])[0]
-        self.var_cible.set(cible)
-        libre = diskinfo.espace_libre(cible) if cible else 0
-        self.var_apercu.set(
-            f"Taille : {self._go(taille)} • Espace libre sur {cible} : {self._go(libre)}"
-        )
+        self.var_source.set(os.path.normpath(dossier))
+        self._maj_apercu()
+
+    def _choisir_cible(self):
+        dossier = filedialog.askdirectory(title="Choisir le dossier cible")
+        if not dossier:
+            return
+        self.var_cible.set(os.path.normpath(dossier))
+        self._maj_apercu()
+
+    def _maj_apercu(self):
+        source = self.var_source.get()
+        cible = self.var_cible.get()
+        parts = []
+        if source:
+            parts.append(f"Taille : {self._go(diskinfo.taille_dossier(source))}")
+        if cible:
+            lecteur = diskinfo.lettre_lecteur(cible)
+            parts.append(f"Espace libre sur {lecteur} : {self._go(diskinfo.espace_libre(lecteur))}")
+        self.var_apercu.set("   •   ".join(parts))
 
     def _ajouter_file(self):
         source = self.var_source.get()
         cible = self.var_cible.get()
         if not source or not cible:
-            messagebox.showwarning("hetsi", "Choisis un dossier et un lecteur cible.")
+            messagebox.showwarning("hetsi", "Choisis un dossier à déplacer et un dossier cible.")
             return
-        # Destination = <cible>\hetsi_apps\<nom du dossier>
         nom = os.path.basename(source.rstrip("\\"))
         if not nom:
             messagebox.showwarning("hetsi", "Choisis un dossier, pas la racine d'un lecteur.")
             return
-        destination = os.path.join(cible, "hetsi_apps", nom)
+        # Destination = <dossier cible>\<nom du logiciel>
+        destination = os.path.join(cible, nom)
+        src_abs = os.path.abspath(source)
+        dst_abs = os.path.abspath(destination)
+        if dst_abs == src_abs or dst_abs.startswith(src_abs + os.sep):
+            messagebox.showwarning(
+                "hetsi", "Le dossier cible ne peut pas être à l'intérieur du dossier à déplacer."
+            )
+            return
         taille = diskinfo.taille_dossier(source)
         self.file.append((source, destination, taille))
         self.tab_file.insert("", "end", values=(source, destination, self._go(taille)))
