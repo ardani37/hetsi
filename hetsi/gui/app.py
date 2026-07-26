@@ -17,6 +17,7 @@ class App(tk.Tk):
         self.geometry("820x620")
         self.historique = Historique(chemin_donnees)
         self.file = []  # liste de (source, destination, taille)
+        self._occupe = False
         self._construire()
         self._rafraichir_historique()
 
@@ -60,8 +61,9 @@ class App(tk.Tk):
         barre.pack(fill="x", padx=10)
         self.progress = ttk.Progressbar(barre, mode="indeterminate")
         self.progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ttk.Button(barre, text="Tout déplacer",
-                   command=self._tout_deplacer).pack(side="right")
+        self.btn_deplacer = ttk.Button(barre, text="Tout déplacer",
+                                       command=self._tout_deplacer)
+        self.btn_deplacer.pack(side="right")
         ttk.Label(self, textvariable=self.var_etat).pack(anchor="w", padx=10)
 
         # Zone Historique
@@ -72,8 +74,9 @@ class App(tk.Tk):
         for c, t in (("src", "Dossier"), ("dst", "Cible"), ("date", "Date")):
             self.tab_hist.heading(c, text=t)
         self.tab_hist.pack(fill="both", expand=True, side="left")
-        ttk.Button(cadre_hist, text="Annuler la ligne sélectionnée",
-                   command=self._annuler).pack(side="bottom", pady=4)
+        self.btn_annuler = ttk.Button(cadre_hist, text="Annuler la ligne sélectionnée",
+                                      command=self._annuler)
+        self.btn_annuler.pack(side="bottom", pady=4)
 
     # --- Actions ---
     def _choisir(self):
@@ -98,6 +101,9 @@ class App(tk.Tk):
             return
         # Destination = <cible>\hetsi_apps\<nom du dossier>
         nom = os.path.basename(source.rstrip("\\"))
+        if not nom:
+            messagebox.showwarning("hetsi", "Choisis un dossier, pas la racine d'un lecteur.")
+            return
         destination = os.path.join(cible, "hetsi_apps", nom)
         taille = diskinfo.taille_dossier(source)
         self.file.append((source, destination, taille))
@@ -106,33 +112,43 @@ class App(tk.Tk):
         self.var_apercu.set("")
 
     def _tout_deplacer(self):
+        if self._occupe:
+            return
         if not self.file:
             return
         recap = "\n".join(f"{s}  ->  {d}" for s, d, _ in self.file)
         if not messagebox.askyesno("Confirmer le déplacement",
                                     f"Déplacer ces dossiers ?\n\n{recap}"):
             return
+        self._occupe = True
+        self.btn_deplacer.config(state="disabled")
+        self.btn_annuler.config(state="disabled")
         threading.Thread(target=self._worker_deplacer, daemon=True).start()
 
     def _worker_deplacer(self):
-        self.progress.start()
+        self.after(0, self.progress.start)
         file = list(self.file)
-        for i, (source, destination, taille) in enumerate(file, 1):
-            try:
-                self._etat(f"Déplacement {i}/{len(file)} : {os.path.basename(source)}…")
-                mover.deplacer(source, destination,
-                               progression=lambda m: self._etat(f"{i}/{len(file)} : {m}"))
-                self.historique.ajouter(source, destination, taille,
-                                        datetime.now().strftime("%Y-%m-%d %H:%M"))
-            except mover.ErreurDeplacement as e:
-                self._erreur(str(e))
-        self.file.clear()
-        self.after(0, lambda: self.tab_file.delete(*self.tab_file.get_children()))
-        self.progress.stop()
-        self._etat("Terminé.")
-        self.after(0, self._rafraichir_historique)
+        try:
+            for i, (source, destination, taille) in enumerate(file, 1):
+                try:
+                    self._etat(f"Déplacement {i}/{len(file)} : {os.path.basename(source)}…")
+                    mover.deplacer(source, destination,
+                                   progression=lambda m: self._etat(f"{i}/{len(file)} : {m}"))
+                    self.historique.ajouter(source, destination, taille,
+                                            datetime.now().strftime("%Y-%m-%d %H:%M"))
+                except Exception as e:
+                    self._erreur(str(e))
+            self.file.clear()
+            self.after(0, lambda: self.tab_file.delete(*self.tab_file.get_children()))
+            self._etat("Terminé.")
+        finally:
+            self.after(0, self.progress.stop)
+            self.after(0, self._rafraichir_historique)
+            self.after(0, self._fin_travail)
 
     def _annuler(self):
+        if self._occupe:
+            return
         sel = self.tab_hist.selection()
         if not sel:
             return
@@ -140,16 +156,21 @@ class App(tk.Tk):
         if not messagebox.askyesno("Confirmer l'annulation",
                                    "Ramener ce dossier à son emplacement d'origine ?"):
             return
+        self._occupe = True
+        self.btn_deplacer.config(state="disabled")
+        self.btn_annuler.config(state="disabled")
         threading.Thread(target=self._worker_annuler, args=(index,), daemon=True).start()
 
     def _worker_annuler(self, index):
-        self.progress.start()
+        self.after(0, self.progress.start)
         try:
             self.historique.annuler(index, progression=self._etat)
-        except mover.ErreurDeplacement as e:
+        except Exception as e:
             self._erreur(str(e))
-        self.progress.stop()
-        self.after(0, self._rafraichir_historique)
+        finally:
+            self.after(0, self.progress.stop)
+            self.after(0, self._rafraichir_historique)
+            self.after(0, self._fin_travail)
 
     # --- Utilitaires UI ---
     def _rafraichir_historique(self):
@@ -163,6 +184,11 @@ class App(tk.Tk):
 
     def _erreur(self, msg):
         self.after(0, lambda: messagebox.showerror("hetsi", msg))
+
+    def _fin_travail(self):
+        self._occupe = False
+        self.btn_deplacer.config(state="normal")
+        self.btn_annuler.config(state="normal")
 
     @staticmethod
     def _go(octets):
