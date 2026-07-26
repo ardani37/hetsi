@@ -25,6 +25,7 @@ def taille_dossier(chemin):
     for racine, dirs, fichiers in os.walk(chemin):
         # Ne pas descendre dans les points de reparse (jonctions/symlinks)
         dirs[:] = [d for d in dirs if not _est_point_reparse(os.path.join(racine, d))]
+        fichiers = [f for f in fichiers if not _est_point_reparse(os.path.join(racine, f))]
         for f in fichiers:
             chemin_f = os.path.join(racine, f)
             try:
