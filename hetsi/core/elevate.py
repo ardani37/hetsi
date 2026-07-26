@@ -21,8 +21,9 @@ def relancer_en_admin():
         dossier = None
     else:
         # Lancé en module : relancer `python -m hetsi.run` depuis la racine projet
+        import hetsi
         cible, params = sys.executable, "-m hetsi.run"
-        dossier = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        dossier = os.path.dirname(os.path.dirname(os.path.abspath(hetsi.__file__)))
     ctypes.windll.shell32.ShellExecuteW(None, "runas", cible, params, dossier, 1)
     return True
 
