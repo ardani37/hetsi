@@ -127,3 +127,32 @@ def test_deplacer_avec_fichier_lecture_seule(tmp_path):
         cible = dst / "readonly.dat"
         if cible.exists():
             os.chmod(str(cible), stat.S_IWRITE)
+
+
+def test_deplacer_copie_echoue_source_intacte(tmp_path, monkeypatch):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "bin.exe").write_bytes(b"programme")
+    dst = tmp_path / "autre" / "app"
+
+    def faux_copier(source, destination):
+        os.makedirs(destination, exist_ok=True)
+        with open(os.path.join(destination, "partiel.tmp"), "wb") as f:
+            f.write(b"incomplet")
+        return mover.ResultatCopie(succes=False, code=8, message="echec simule")
+
+    monkeypatch.setattr(mover, "copier", faux_copier)
+
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.deplacer(str(src), str(dst))
+
+    assert mover.est_jonction(str(src)) is False
+    assert (src / "bin.exe").read_bytes() == b"programme"
+    assert not os.path.exists(str(dst))
+
+
+def test_valider_refuse_espace_insuffisant(tmp_path, monkeypatch):
+    src = tmp_path / "src"; src.mkdir()
+    (src / "a.txt").write_bytes(b"x" * 10)
+    monkeypatch.setattr(mover.diskinfo, "espace_libre", lambda lecteur: 0)
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(tmp_path / "dst"))

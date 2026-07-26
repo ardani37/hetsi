@@ -73,6 +73,7 @@ class ErreurDeplacement(Exception):
 
 
 def valider(source, destination, marge=100 * 1024 * 1024):
+    """Vérifie que le déplacement source -> destination est possible, sinon lève ErreurDeplacement."""
     if not os.path.isdir(source):
         raise ErreurDeplacement(f"La source n'existe pas ou n'est pas un dossier : {source}")
     if est_jonction(source):
@@ -88,6 +89,7 @@ def valider(source, destination, marge=100 * 1024 * 1024):
 
 
 def deplacer(source, destination, progression=None):
+    """Orchestre le déplacement complet : valide, copie, supprime l'original, crée la jonction."""
     def _dire(msg):
         if progression:
             progression(msg)
@@ -99,8 +101,11 @@ def deplacer(source, destination, progression=None):
     res = copier(source, destination)
     if not res.succes:
         # Nettoyage de la copie partielle, original intact
-        if os.path.exists(destination):
-            shutil.rmtree(destination, ignore_errors=True)
+        try:
+            if os.path.exists(destination):
+                _supprimer_arbre(destination)
+        except OSError:
+            pass  # ne pas masquer l'erreur de copie d'origine
         raise ErreurDeplacement(f"La copie a échoué (code robocopy {res.code}). Original intact.")
 
     _dire("Suppression de l'original…")
