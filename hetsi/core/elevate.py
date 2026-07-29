@@ -28,15 +28,18 @@ def relancer_en_admin():
     return True
 
 
-def chemin_donnees():
-    """%APPDATA%\\hetsi\\history.json (dossier créé si absent)."""
+def _dossier_appdata():
+    """Dossier %APPDATA%\\hetsi (créé si absent)."""
     base = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "hetsi")
     os.makedirs(base, exist_ok=True)
-    return os.path.join(base, "history.json")
+    return base
+
+
+def chemin_donnees():
+    """%APPDATA%\\hetsi\\history.json (dossier créé si absent)."""
+    return os.path.join(_dossier_appdata(), "history.json")
 
 
 def chemin_log():
     """%APPDATA%\\hetsi\\hetsi.log (dossier créé si absent)."""
-    base = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "hetsi")
-    os.makedirs(base, exist_ok=True)
-    return os.path.join(base, "hetsi.log")
+    return os.path.join(_dossier_appdata(), "hetsi.log")

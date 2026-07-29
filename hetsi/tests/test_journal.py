@@ -15,3 +15,11 @@ def test_configurer_ecrit_dans_le_fichier(tmp_path):
 
 def test_journal_renvoie_le_meme_logger():
     assert journal.journal() is logging.getLogger("hetsi")
+
+
+def test_configurer_ne_stacke_pas_les_handlers(tmp_path):
+    chemin = str(tmp_path / "hetsi.log")
+    journal.configurer(chemin)
+    journal.configurer(chemin)
+    fichiers = [h for h in journal.journal().handlers if isinstance(h, logging.FileHandler)]
+    assert len(fichiers) == 1
