@@ -20,7 +20,7 @@ jobs:
       - name: Installer les dépendances
         run: python -m pip install pyinstaller customtkinter
       - name: Construire l'exe
-        run: python -m PyInstaller --onefile --windowed --name hetsi --icon hetsi/assets/hetsi.ico --collect-all customtkinter main.py
+        run: python -m PyInstaller --onefile --windowed --name hetsi --icon hetsi/assets/hetsi.ico --add-data "hetsi/assets/hetsi.ico;hetsi/assets" --collect-all customtkinter main.py
       - name: Publier la Release
         uses: softprops/action-gh-release@v2
         with:
