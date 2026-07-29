@@ -88,7 +88,7 @@ def valider(source, destination, marge=100 * 1024 * 1024):
         )
 
 
-def deplacer(source, destination, progression=None):
+def deplacer(source, destination, progression=None, apres_copie=None):
     """Orchestre le déplacement complet : valide, copie, supprime l'original, crée la jonction."""
     def _dire(msg):
         if progression:
@@ -110,6 +110,9 @@ def deplacer(source, destination, progression=None):
 
     _dire("Suppression de l'original…")
     _supprimer_arbre(source)
+
+    if apres_copie is not None:
+        apres_copie(source, destination)
 
     _dire("Création de la jonction…")
     creer_jonction(source, destination)

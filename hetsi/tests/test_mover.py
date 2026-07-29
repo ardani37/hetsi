@@ -156,3 +156,33 @@ def test_valider_refuse_espace_insuffisant(tmp_path, monkeypatch):
     monkeypatch.setattr(mover.diskinfo, "espace_libre", lambda lecteur: 0)
     with pytest.raises(mover.ErreurDeplacement):
         mover.valider(str(src), str(tmp_path / "dst"))
+
+
+def test_deplacer_appelle_apres_copie_avant_jonction(tmp_path, monkeypatch):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "bin.exe").write_bytes(b"programme")
+    dst = tmp_path / "cible" / "app"
+    appels = []
+
+    def apres(source, destination):
+        appels.append((source, destination))
+        # à ce stade l'original est déjà supprimé et la copie faite
+        assert os.path.exists(destination)
+        assert not mover.est_jonction(source)  # jonction pas encore créée
+
+    mover.deplacer(str(src), str(dst), apres_copie=apres)
+    assert appels == [(str(src), str(dst))]
+    assert mover.est_jonction(str(src)) is True
+
+
+def test_deplacer_apres_copie_appele_meme_si_jonction_echoue(tmp_path, monkeypatch):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "bin.exe").write_bytes(b"x")
+    dst = tmp_path / "cible" / "app"
+    appels = []
+    monkeypatch.setattr(mover, "creer_jonction",
+                        lambda l, c: (_ for _ in ()).throw(RuntimeError("mklink KO")))
+    with pytest.raises(RuntimeError):
+        mover.deplacer(str(src), str(dst), apres_copie=lambda s, d: appels.append((s, d)))
+    # apres_copie a bien été appelé avant l'échec de la jonction
+    assert appels == [(str(src), str(dst))]
