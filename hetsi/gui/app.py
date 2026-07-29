@@ -215,9 +215,14 @@ class App(ctk.CTk):
         self.barre_espace.set(min(max(fraction, 0), 1))
         self.var_espace_caption.set(f"{self._go(libre)} libres sur {lettre}")
 
-        total_a_liberer = sum(taille for _, _, taille in self.file)
+        # N'additionner que les dossiers situés sur le disque affiché, sinon le
+        # total ne correspondrait pas à la barre.
+        total_a_liberer = sum(
+            taille for src, _, taille in self.file
+            if diskinfo.lettre_lecteur(src).lower() == lecteur.lower()
+        )
         self.var_a_liberer.set(
-            f"{self._go(total_a_liberer)} à libérer" if self.file else "")
+            f"{self._go(total_a_liberer)} à libérer" if total_a_liberer else "")
 
     @staticmethod
     def _usage_lecteur(lecteur):
@@ -380,6 +385,7 @@ class App(ctk.CTk):
         file = list(self.file)
         reussis = []
         echoues = []
+        messages_echec = []
         try:
             for i, (source, destination, taille) in enumerate(file, 1):
                 try:
@@ -395,7 +401,7 @@ class App(ctk.CTk):
                 except Exception as e:
                     journal().exception("Échec du déplacement de %s vers %s", source, destination)
                     echoues.append((source, destination, taille))
-                    self._erreur(f"{os.path.basename(source)} : {e}")
+                    messages_echec.append(f"• {os.path.basename(source)} : {e}")
 
             def _appliquer_resultat():
                 reussis_set = {(s, d) for s, d, _ in reussis}
@@ -405,6 +411,12 @@ class App(ctk.CTk):
 
             self.after(0, _appliquer_resultat)
             self._etat(f"{len(reussis)} réussi(s), {len(echoues)} échoué(s).")
+            if messages_echec:
+                detail = "\n".join(messages_echec)
+                self._erreur(
+                    f"{len(echoues)} dossier(s) n'ont pas pu être déplacés "
+                    f"et restent dans la file :\n\n{detail}"
+                )
         except Exception:
             journal().exception("Erreur inattendue pendant le déplacement en lot")
             self._erreur("Une erreur inattendue est survenue pendant le déplacement.")
@@ -433,6 +445,7 @@ class App(ctk.CTk):
         finally:
             self.after(0, self.progress.stop)
             self.after(0, self._rafraichir_historique)
+            self.after(0, self._maj_barre_espace)
             self.after(0, self._fin_travail)
 
     # --- Utilitaires UI ---
