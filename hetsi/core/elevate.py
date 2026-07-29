@@ -33,3 +33,10 @@ def chemin_donnees():
     base = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "hetsi")
     os.makedirs(base, exist_ok=True)
     return os.path.join(base, "history.json")
+
+
+def chemin_log():
+    """%APPDATA%\\hetsi\\hetsi.log (dossier créé si absent)."""
+    base = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "hetsi")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "hetsi.log")

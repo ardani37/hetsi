@@ -14,6 +14,13 @@ def test_chemin_donnees(monkeypatch, tmp_path):
     assert os.path.isdir(os.path.dirname(chemin))
 
 
+def test_chemin_log(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    chemin = elevate.chemin_log()
+    assert chemin.endswith(os.path.join("hetsi", "hetsi.log"))
+    assert os.path.isdir(os.path.dirname(chemin))
+
+
 def test_racine_projet_contient_le_paquet_hetsi():
     import hetsi
     racine = os.path.dirname(os.path.dirname(os.path.abspath(hetsi.__file__)))
