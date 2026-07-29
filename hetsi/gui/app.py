@@ -26,6 +26,8 @@ class App(ctk.CTk):
         self.historique = Historique(chemin_donnees)
         self.file = []  # liste de (source, destination, taille)
         self._occupe = False
+        self._taille_source_chemin = None
+        self._taille_source_octets = 0
 
         self._definir_icone()
         self._construire()
@@ -238,6 +240,13 @@ class App(ctk.CTk):
         self.var_cible.set(os.path.normpath(dossier))
         self._maj_apercu()
 
+    def _taille_source_mise_en_cache(self, source):
+        """Calcule la taille de `source` une seule fois par chemin, réutilise sinon."""
+        if source != self._taille_source_chemin:
+            self._taille_source_chemin = source
+            self._taille_source_octets = diskinfo.taille_dossier(source) if source else 0
+        return self._taille_source_octets
+
     def _maj_apercu(self):
         source = self.var_source.get()
         cible = self.var_cible.get()
@@ -245,7 +254,7 @@ class App(ctk.CTk):
         self.var_source_taille.set("")
         self.var_cible_libre.set("")
         if source:
-            taille_txt = f"Taille : {self._go(diskinfo.taille_dossier(source))}"
+            taille_txt = f"Taille : {self._go(self._taille_source_mise_en_cache(source))}"
             self.var_source_taille.set(taille_txt)
             parts.append(taille_txt)
         if cible:
@@ -280,7 +289,7 @@ class App(ctk.CTk):
             messagebox.showerror("hetsi", str(e))
             return
 
-        taille = diskinfo.taille_dossier(source)
+        taille = self._taille_source_mise_en_cache(source)
         self.file.append((source, destination, taille))
         self._ajouter_ligne_file(len(self.file) - 1, source, destination, taille)
         self.var_source.set("")
@@ -432,9 +441,10 @@ class App(ctk.CTk):
             enfant.destroy()
 
         entrees = self.historique.entrees()
-        self.label_hist_vide = ctk.CTkLabel(
-            self.liste_hist, textvariable=self.var_hist_vide, text_color=("gray40", "gray60"))
         if not entrees:
+            self.label_hist_vide = ctk.CTkLabel(
+                self.liste_hist, textvariable=self.var_hist_vide,
+                text_color=("gray40", "gray60"))
             self.label_hist_vide.pack(pady=10)
             return
 
