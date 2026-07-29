@@ -11,6 +11,7 @@ fonctionner comme si de rien n'était.
 - File d'attente : plusieurs dossiers d'un coup
 - Aperçu de la taille du dossier et de l'espace disque
 - Historique avec annulation en un clic
+- Interface CustomTkinter, mode sombre/clair automatique (suit Windows)
 
 ## Téléchargement
 
@@ -24,7 +25,7 @@ téléchargez `hetsi.exe`. Aucune installation requise.
 ## Développement
 
 ```
-py -m pip install pytest pyinstaller
+py -m pip install -r hetsi/requirements.txt pytest pyinstaller
 py -m pytest hetsi/
 py -m hetsi.run
 ```
