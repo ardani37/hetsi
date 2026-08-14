@@ -84,7 +84,9 @@ def valider(source, destination, marge=100 * 1024 * 1024, fusion=False):
         raise ErreurDeplacement(f"La source est déjà une jonction : {source}")
     src_abs = os.path.abspath(source)
     dst_abs = os.path.abspath(destination)
-    if dst_abs == src_abs or dst_abs.startswith(src_abs + os.sep):
+    src_cmp = os.path.normcase(src_abs)
+    dst_cmp = os.path.normcase(dst_abs)
+    if dst_cmp == src_cmp or dst_cmp.startswith(src_cmp + os.sep):
         raise ErreurDeplacement(
             f"La destination est à l'intérieur de la source : {destination}"
         )

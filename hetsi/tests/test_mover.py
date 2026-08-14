@@ -288,3 +288,22 @@ def test_copier_ne_purge_pas_la_destination(tmp_path):
     assert res.succes is True
     assert (dst / "a.txt").read_bytes() == b"AAAAA"          # reparé
     assert (dst / "fichier_utilisateur.txt").read_bytes() == b"a moi"  # préservé
+
+
+def test_valider_refuse_destination_dans_la_source_casse_differente(tmp_path):
+    src = tmp_path / "App"; src.mkdir()
+    (src / "a.txt").write_bytes(b"x")
+    # Même emplacement physique, casse différente : doit être refusé aussi
+    dst = os.path.join(str(src).upper(), "sous")
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), dst)
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), dst, fusion=True)
+
+
+def test_valider_accepte_un_frere_au_prefixe_commun(tmp_path):
+    src = tmp_path / "App"; src.mkdir()
+    (src / "a.txt").write_bytes(b"x")
+    frere = tmp_path / "App2" / "cible"
+    # "App2" partage le préfixe "App" mais n'est pas dans la source : accepté
+    mover.valider(str(src), str(frere))

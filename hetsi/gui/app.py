@@ -283,7 +283,9 @@ class App(ctk.CTk):
         destination = os.path.join(cible, nom)
         src_abs = os.path.abspath(source)
         dst_abs = os.path.abspath(destination)
-        if dst_abs == src_abs or dst_abs.startswith(src_abs + os.sep):
+        src_cmp = os.path.normcase(src_abs)
+        dst_cmp = os.path.normcase(dst_abs)
+        if dst_cmp == src_cmp or dst_cmp.startswith(src_cmp + os.sep):
             messagebox.showwarning(
                 "hetsi", "Le dossier cible ne peut pas être à l'intérieur du dossier à déplacer."
             )
