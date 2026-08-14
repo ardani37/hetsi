@@ -72,13 +72,17 @@ class ErreurDeplacement(Exception):
     pass
 
 
-def valider(source, destination, marge=100 * 1024 * 1024):
-    """Vérifie que le déplacement source -> destination est possible, sinon lève ErreurDeplacement."""
+def valider(source, destination, marge=100 * 1024 * 1024, fusion=False):
+    """Vérifie que le déplacement source -> destination est possible, sinon lève ErreurDeplacement.
+
+    Quand `fusion` est vrai, une destination existante est acceptée (reprise
+    d'un déplacement interrompu).
+    """
     if not os.path.isdir(source):
         raise ErreurDeplacement(f"La source n'existe pas ou n'est pas un dossier : {source}")
     if est_jonction(source):
         raise ErreurDeplacement(f"La source est déjà une jonction : {source}")
-    if os.path.exists(destination):
+    if os.path.exists(destination) and not fusion:
         raise ErreurDeplacement(f"La destination existe déjà : {destination}")
     besoin = diskinfo.taille_dossier(source) + marge
     libre = diskinfo.espace_libre(diskinfo.lettre_lecteur(destination))
@@ -88,24 +92,30 @@ def valider(source, destination, marge=100 * 1024 * 1024):
         )
 
 
-def deplacer(source, destination, progression=None, apres_copie=None):
-    """Orchestre le déplacement complet : valide, copie, supprime l'original, crée la jonction."""
+def deplacer(source, destination, progression=None, apres_copie=None, fusion=False):
+    """Orchestre le déplacement complet : valide, copie, supprime l'original, crée la jonction.
+
+    En mode `fusion`, la destination préexiste : elle n'est jamais supprimée,
+    même si la copie échoue.
+    """
     def _dire(msg):
         if progression:
             progression(msg)
 
     _dire("Validation…")
-    valider(source, destination)
+    valider(source, destination, fusion=fusion)
 
     _dire("Copie en cours…")
     res = copier(source, destination)
     if not res.succes:
-        # Nettoyage de la copie partielle, original intact
-        try:
-            if os.path.exists(destination):
-                _supprimer_arbre(destination)
-        except OSError:
-            pass  # ne pas masquer l'erreur de copie d'origine
+        if not fusion:
+            # Nettoyage de la copie partielle que nous venons de créer.
+            # En fusion la destination appartient à l'utilisateur : on n'y touche pas.
+            try:
+                if os.path.exists(destination):
+                    _supprimer_arbre(destination)
+            except OSError:
+                pass  # ne pas masquer l'erreur de copie d'origine
         raise ErreurDeplacement(f"La copie a échoué (code robocopy {res.code}). Original intact.")
 
     _dire("Suppression de l'original…")

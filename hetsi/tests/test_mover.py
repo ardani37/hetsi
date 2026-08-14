@@ -186,3 +186,71 @@ def test_deplacer_apres_copie_appele_meme_si_jonction_echoue(tmp_path, monkeypat
         mover.deplacer(str(src), str(dst), apres_copie=lambda s, d: appels.append((s, d)))
     # apres_copie a bien été appelé avant l'échec de la jonction
     assert appels == [(str(src), str(dst))]
+
+
+def test_valider_accepte_destination_existante_en_fusion(tmp_path):
+    src = tmp_path / "src"; src.mkdir()
+    (src / "a.txt").write_bytes(b"x")
+    dst = tmp_path / "dst"; dst.mkdir()
+    # Sans fusion : refus (comportement historique)
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(dst))
+    # Avec fusion : accepté
+    mover.valider(str(src), str(dst), fusion=True)
+
+
+def test_deplacer_fusion_reprend_une_copie_partielle(tmp_path):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "a.txt").write_bytes(b"12345")
+    (src / "b.txt").write_bytes(b"67")
+    dst = tmp_path / "cible" / "app"
+    os.makedirs(str(dst))
+    (dst / "a.txt").write_bytes(b"12345")  # déjà copié
+
+    mover.deplacer(str(src), str(dst), fusion=True)
+
+    assert (dst / "a.txt").read_bytes() == b"12345"
+    assert (dst / "b.txt").read_bytes() == b"67"
+    assert mover.est_jonction(str(src)) is True
+    assert (src / "b.txt").read_bytes() == b"67"
+
+
+def test_deplacer_fusion_ne_supprime_pas_la_destination_si_copie_echoue(tmp_path, monkeypatch):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "a.txt").write_bytes(b"programme")
+    dst = tmp_path / "cible" / "app"
+    os.makedirs(str(dst))
+    (dst / "deja_la.txt").write_bytes(b"donnees precieuses")
+
+    monkeypatch.setattr(
+        mover, "copier",
+        lambda source, destination: mover.ResultatCopie(
+            succes=False, code=8, message="echec simule"),
+    )
+
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.deplacer(str(src), str(dst), fusion=True)
+
+    # La destination préexistante est intacte, et l'original aussi
+    assert (dst / "deja_la.txt").read_bytes() == b"donnees precieuses"
+    assert (src / "a.txt").read_bytes() == b"programme"
+    assert mover.est_jonction(str(src)) is False
+
+
+def test_deplacer_sans_fusion_nettoie_toujours_la_destination(tmp_path, monkeypatch):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "a.txt").write_bytes(b"programme")
+    dst = tmp_path / "cible" / "app"
+
+    def faux_copier(source, destination):
+        os.makedirs(destination, exist_ok=True)
+        with open(os.path.join(destination, "partiel.tmp"), "wb") as f:
+            f.write(b"incomplet")
+        return mover.ResultatCopie(succes=False, code=8, message="echec simule")
+
+    monkeypatch.setattr(mover, "copier", faux_copier)
+
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.deplacer(str(src), str(dst))
+
+    assert not os.path.exists(str(dst))
