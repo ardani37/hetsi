@@ -254,3 +254,37 @@ def test_deplacer_sans_fusion_nettoie_toujours_la_destination(tmp_path, monkeypa
         mover.deplacer(str(src), str(dst))
 
     assert not os.path.exists(str(dst))
+
+
+def test_valider_refuse_destination_dans_la_source(tmp_path):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "a.txt").write_bytes(b"x")
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(src / "sous"))
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(src / "sous"), fusion=True)
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(src))
+
+
+def test_deplacer_refuse_destination_dans_la_source_sans_perte(tmp_path):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "a.txt").write_bytes(b"precieux")
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.deplacer(str(src), str(src / "sous"))
+    assert (src / "a.txt").read_bytes() == b"precieux"
+    assert mover.est_jonction(str(src)) is False
+
+
+def test_copier_ne_purge_pas_la_destination(tmp_path):
+    src = tmp_path / "src"; src.mkdir()
+    (src / "a.txt").write_bytes(b"AAAAA")
+    dst = tmp_path / "dst"; dst.mkdir()
+    (dst / "a.txt").write_bytes(b"PARTIEL")
+    (dst / "fichier_utilisateur.txt").write_bytes(b"a moi")
+
+    res = mover.copier(str(src), str(dst))
+
+    assert res.succes is True
+    assert (dst / "a.txt").read_bytes() == b"AAAAA"          # reparé
+    assert (dst / "fichier_utilisateur.txt").read_bytes() == b"a moi"  # préservé

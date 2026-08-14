@@ -66,3 +66,20 @@ def test_annuler_recopie_echoue_conserve_entree(tmp_path, monkeypatch):
 
     assert len(h.entrees()) == 1              # entree conservee
     assert mover.est_jonction(str(src)) is True  # jonction retablie
+
+
+def test_annuler_ne_supprime_pas_une_destination_de_fusion(tmp_path):
+    src = tmp_path / "app"; src.mkdir()
+    (src / "bin.exe").write_bytes(b"programme")
+    dst = tmp_path / "cible" / "app"
+    mover.deplacer(str(src), str(dst))
+    (dst / "fichier_utilisateur.txt").write_bytes(b"a moi")
+
+    h = Historique(str(tmp_path / "history.json"))
+    h.ajouter(str(src), str(dst), 9, "2026-07-30 10:00", fusion=True)
+    h.annuler(0)
+
+    assert mover.est_jonction(str(src)) is False
+    assert (src / "bin.exe").read_bytes() == b"programme"
+    assert os.path.exists(str(dst))                                   # cible conservée
+    assert (dst / "fichier_utilisateur.txt").read_bytes() == b"a moi"

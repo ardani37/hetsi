@@ -26,13 +26,14 @@ class Historique:
     def entrees(self):
         return self._lire()
 
-    def ajouter(self, source, destination, taille, date):
+    def ajouter(self, source, destination, taille, date, fusion=False):
         entrees = self._lire()
         entrees.append({
             "source": source,
             "destination": destination,
             "taille": taille,
             "date": date,
+            "fusion": bool(fusion),
         })
         self._ecrire(entrees)
 
@@ -65,10 +66,11 @@ class Historique:
             )
 
         _dire("Suppression de la copie sur la cible…")
-        try:
-            mover._supprimer_arbre(destination)
-        except OSError:
-            pass  # ne pas masquer la réussite de la restauration
+        if not e.get("fusion", False):
+            try:
+                mover._supprimer_arbre(destination)
+            except OSError:
+                pass  # ne pas masquer la réussite de la restauration
 
         entrees.pop(index)
         self._ecrire(entrees)

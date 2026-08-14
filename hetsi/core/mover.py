@@ -82,9 +82,18 @@ def valider(source, destination, marge=100 * 1024 * 1024, fusion=False):
         raise ErreurDeplacement(f"La source n'existe pas ou n'est pas un dossier : {source}")
     if est_jonction(source):
         raise ErreurDeplacement(f"La source est déjà une jonction : {source}")
+    src_abs = os.path.abspath(source)
+    dst_abs = os.path.abspath(destination)
+    if dst_abs == src_abs or dst_abs.startswith(src_abs + os.sep):
+        raise ErreurDeplacement(
+            f"La destination est à l'intérieur de la source : {destination}"
+        )
     if os.path.exists(destination) and not fusion:
         raise ErreurDeplacement(f"La destination existe déjà : {destination}")
     besoin = diskinfo.taille_dossier(source) + marge
+    if fusion and os.path.isdir(destination):
+        besoin = max(0, diskinfo.taille_dossier(source)
+                     - diskinfo.taille_dossier(destination)) + marge
     libre = diskinfo.espace_libre(diskinfo.lettre_lecteur(destination))
     if libre < besoin:
         raise ErreurDeplacement(
@@ -96,7 +105,9 @@ def deplacer(source, destination, progression=None, apres_copie=None, fusion=Fal
     """Orchestre le déplacement complet : valide, copie, supprime l'original, crée la jonction.
 
     En mode `fusion`, la destination préexiste : elle n'est jamais supprimée,
-    même si la copie échoue.
+    même si la copie échoue. Robocopy écrase toutefois les fichiers de même
+    nom qu'il recopie ; seule la suppression de l'arborescence est exclue,
+    pas la réécriture fichier par fichier.
     """
     def _dire(msg):
         if progression:
