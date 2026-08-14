@@ -79,3 +79,24 @@ def test_sortie_powershell_objet_unique(monkeypatch):
     assert len(trouves) == 1
     assert trouves[0].pid == 42
     assert trouves[0].nom == "jeu"
+
+
+def test_fermer_ne_ment_pas_si_la_verification_echoue(monkeypatch):
+    # PowerShell muet : on ne doit PAS conclure que le processus est fermé
+    monkeypatch.setattr(processus, "_powershell", lambda script: "")
+    assert processus.fermer(4242, force=True, attente=0.5) is False
+
+
+def test_existe_distingue_les_trois_cas(monkeypatch):
+    monkeypatch.setattr(processus, "_powershell", lambda script: "oui")
+    assert processus._existe(1) is True
+    monkeypatch.setattr(processus, "_powershell", lambda script: "non")
+    assert processus._existe(1) is False
+    monkeypatch.setattr(processus, "_powershell", lambda script: "")
+    assert processus._existe(1) is True  # prudence
+
+
+def test_dossier_avec_crochets_ne_casse_pas(tmp_path):
+    dossier = tmp_path / "Jeu [2026]"
+    dossier.mkdir()
+    assert processus.processus_du_dossier(str(dossier)) == []

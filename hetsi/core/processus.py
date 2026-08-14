@@ -45,8 +45,10 @@ def _charger_json(sortie):
 
 def processus_du_dossier(dossier):
     """Programmes dont l'exécutable se trouve dans `dossier` (récursivement)."""
-    motif = dossier.rstrip("\\") + "\\*"
-    motif_ps = motif.replace("'", "''")
+    motif_ps = (dossier.rstrip("\\")
+                .replace("'", "''")
+                .replace("[", "`[")
+                .replace("]", "`]")) + "\\*"
     script = (
         "Get-Process | Where-Object { $_.Path -like '" + motif_ps + "' } "
         "| Select-Object Id,ProcessName,Path | ConvertTo-Json -Compress"
@@ -65,11 +67,17 @@ def processus_du_dossier(dossier):
 
 
 def _existe(pid):
+    """True si le processus tourne. En cas d'échec de vérification, on suppose
+    qu'il tourne encore : mieux vaut un faux « toujours là » qu'un faux « fermé »."""
     sortie = _powershell(
         f"if (Get-Process -Id {int(pid)} -ErrorAction SilentlyContinue) "
         "{ 'oui' } else { 'non' }"
     )
-    return "oui" in sortie
+    if "oui" in sortie:
+        return True
+    if "non" in sortie:
+        return False
+    return True  # vérification impossible : prudence
 
 
 def fermer(pid, force=False, attente=3.0):
