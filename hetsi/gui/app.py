@@ -5,15 +5,24 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox
+from typing import NamedTuple
 
 import customtkinter as ctk
 
-from hetsi.core import diskinfo, mover
+from hetsi.core import comparaison, diskinfo, mover, risques
 from hetsi.core.history import Historique
 from hetsi.core.journal import journal
 
 ctk.set_appearance_mode("system")
 ctk.set_default_color_theme("blue")
+
+
+class ElementFile(NamedTuple):
+    source: str
+    destination: str
+    taille: int
+    fusion: bool = False
+    risques: tuple = ()
 
 
 class App(ctk.CTk):
@@ -24,7 +33,7 @@ class App(ctk.CTk):
         self.minsize(760, 600)
 
         self.historique = Historique(chemin_donnees)
-        self.file = []  # liste de (source, destination, taille)
+        self.file = []  # liste d'ElementFile
         self._occupe = False
         self._taille_source_chemin = None
         self._taille_source_octets = 0
@@ -196,7 +205,7 @@ class App(ctk.CTk):
     # --- Barre d'espace disque ---
     def _maj_barre_espace(self):
         if self.file:
-            lecteur = diskinfo.lettre_lecteur(self.file[0][0])
+            lecteur = diskinfo.lettre_lecteur(self.file[0].source)
         else:
             lecteur = "C:\\"
         try:
@@ -218,8 +227,8 @@ class App(ctk.CTk):
         # N'additionner que les dossiers situés sur le disque affiché, sinon le
         # total ne correspondrait pas à la barre.
         total_a_liberer = sum(
-            taille for src, _, taille in self.file
-            if diskinfo.lettre_lecteur(src).lower() == lecteur.lower()
+            e.taille for e in self.file
+            if diskinfo.lettre_lecteur(e.source).lower() == lecteur.lower()
         )
         self.var_a_liberer.set(
             f"{self._go(total_a_liberer)} à libérer" if total_a_liberer else "")
@@ -290,15 +299,63 @@ class App(ctk.CTk):
                 "hetsi", "Le dossier cible ne peut pas être à l'intérieur du dossier à déplacer."
             )
             return
+
+        # 1. Analyse de risque
+        risques_trouves = risques.analyser(source, destination)
+        bloquants = [r for r in risques_trouves if r.niveau == "bloquant"]
+        if bloquants:
+            messagebox.showerror("hetsi", bloquants[0].message)
+            return
+        avertissements = [r for r in risques_trouves if r.niveau in ("eleve", "moyen")]
+        if avertissements:
+            detail = "\n\n".join(f"• {r.message}" for r in avertissements)
+            if not messagebox.askyesno(
+                "Déplacement à vérifier",
+                f"{detail}\n\nAjouter quand même à la file ?",
+            ):
+                return
+
+        # 2. Destination existante : comparer et proposer la reprise
+        fusion = False
+        if os.path.exists(destination):
+            c = comparaison.comparer(source, destination)
+            total_src = len(c.identiques) + len(c.manquants) + len(c.differents)
+            if c.verdict == "complete":
+                question = (
+                    f"La cible contient déjà les {total_src} fichiers de ce dossier.\n\n"
+                    "Finaliser le déplacement (supprimer l'original et créer la jonction) ?"
+                )
+            elif c.verdict == "partielle":
+                question = (
+                    f"La cible contient déjà {len(c.identiques)} fichiers sur {total_src}.\n"
+                    f"{len(c.manquants)} manquant(s), {len(c.differents)} à recopier, "
+                    "aucun fichier étranger.\n\nReprendre et finaliser ?"
+                )
+            elif c.verdict == "etrangere":
+                question = (
+                    f"La cible contient {len(c.en_trop)} fichier(s) qui ne viennent pas "
+                    "de ce dossier.\nCe n'est probablement pas une copie interrompue : "
+                    "les contenus seraient fusionnés.\n\nContinuer quand même ?"
+                )
+            else:  # "vide" : dossier cible présent mais sans fichier
+                question = (
+                    "Le dossier cible existe mais est vide.\n\nContinuer le déplacement ?"
+                )
+            if not messagebox.askyesno("La destination existe déjà", question):
+                return
+            fusion = True
+
+        # 3. Validation cœur (espace disque, source valide)
         try:
-            mover.valider(source, destination)
+            mover.valider(source, destination, fusion=fusion)
         except mover.ErreurDeplacement as e:
             messagebox.showerror("hetsi", str(e))
             return
 
         taille = self._taille_source_mise_en_cache(source)
-        self.file.append((source, destination, taille))
-        self._ajouter_ligne_file(len(self.file) - 1, source, destination, taille)
+        element = ElementFile(source, destination, taille, fusion, tuple(risques_trouves))
+        self.file.append(element)
+        self._ajouter_ligne_file(len(self.file) - 1, element)
         self.var_source.set("")
         self.var_cible.set("")
         self.var_source_taille.set("")
@@ -306,7 +363,7 @@ class App(ctk.CTk):
         self.var_apercu.set("")
         self._maj_barre_espace()
 
-    def _ajouter_ligne_file(self, index, source, destination, taille):
+    def _ajouter_ligne_file(self, index, element):
         vide = getattr(self, "label_file_vide", None)
         if vide is not None and vide.winfo_exists():
             vide.pack_forget()
@@ -315,8 +372,8 @@ class App(ctk.CTk):
         ligne.pack(fill="x", pady=3, padx=2)
         ligne._hetsi_index = index
 
-        nom = os.path.basename(source.rstrip("\\"))
-        texte_chemin = f"{self._tronquer(source)}  →  {self._tronquer(destination)}"
+        nom = os.path.basename(element.source.rstrip("\\"))
+        texte_chemin = f"{self._tronquer(element.source)}  →  {self._tronquer(element.destination)}"
 
         cadre_txt = ctk.CTkFrame(ligne, fg_color="transparent")
         cadre_txt.pack(side="left", fill="x", expand=True, padx=10, pady=6)
@@ -325,7 +382,19 @@ class App(ctk.CTk):
         ctk.CTkLabel(cadre_txt, text=texte_chemin, anchor="w",
                      text_color=("gray40", "gray60"), font=ctk.CTkFont(size=11)).pack(fill="x")
 
-        ctk.CTkLabel(ligne, text=self._go(taille), width=90).pack(side="left", padx=6)
+        ctk.CTkLabel(ligne, text=self._go(element.taille), width=90).pack(side="left", padx=6)
+
+        if element.fusion:
+            texte, couleur = "reprise", ("#1d4ed8", "#93c5fd")
+        elif element.risques:
+            pire = max(element.risques,
+                       key=lambda r: {"moyen": 1, "eleve": 2}.get(r.niveau, 0))
+            texte, couleur = "à vérifier", ("#b45309", "#fbbf24")
+            ligne._hetsi_motif = pire.message
+        else:
+            texte, couleur = "sûr", ("#15803d", "#4ade80")
+        ctk.CTkLabel(ligne, text=texte, width=80, text_color=couleur,
+                     font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=4)
 
         btn_suppr = ctk.CTkButton(ligne, text="✕", width=28, height=28,
                                   fg_color="transparent", hover_color=("#fee2e2", "#450a0a"),
@@ -354,12 +423,12 @@ class App(ctk.CTk):
                 text_color=("gray40", "gray60"))
             self.label_file_vide.pack(pady=10)
         else:
-            for i, (source, destination, taille) in enumerate(self.file):
-                self._ajouter_ligne_file(i, source, destination, taille)
+            for i, e in enumerate(self.file):
+                self._ajouter_ligne_file(i, e)
         self._maj_total_file()
 
     def _maj_total_file(self):
-        total = sum(taille for _, _, taille in self.file)
+        total = sum(e.taille for e in self.file)
         self.var_total_file.set(
             f"{len(self.file)} dossier(s) — {self._go(total)}" if self.file else "")
 
@@ -374,7 +443,7 @@ class App(ctk.CTk):
             return
         if not self.file:
             return
-        recap = "\n".join(f"{s}  ->  {d}" for s, d, _ in self.file)
+        recap = "\n".join(f"{e.source}  ->  {e.destination}" for e in self.file)
         if not messagebox.askyesno("Confirmer le déplacement",
                                     f"Déplacer ces dossiers ?\n\n{recap}"):
             return
@@ -389,25 +458,26 @@ class App(ctk.CTk):
         echoues = []
         messages_echec = []
         try:
-            for i, (source, destination, taille) in enumerate(file, 1):
+            for i, e in enumerate(file, 1):
                 try:
-                    self._etat(f"Déplacement {i}/{len(file)} : {os.path.basename(source)}…")
+                    self._etat(f"Déplacement {i}/{len(file)} : {os.path.basename(e.source)}…")
                     date = datetime.now().strftime("%Y-%m-%d %H:%M")
                     mover.deplacer(
-                        source, destination,
+                        e.source, e.destination,
                         progression=lambda m, i=i: self._etat(f"{i}/{len(file)} : {m}"),
-                        apres_copie=lambda s, d, taille=taille, date=date:
-                            self.historique.ajouter(s, d, taille, date),
+                        apres_copie=lambda s, d, taille=e.taille, date=date, fusion=e.fusion:
+                            self.historique.ajouter(s, d, taille, date, fusion=fusion),
+                        fusion=e.fusion,
                     )
-                    reussis.append((source, destination, taille))
-                except Exception as e:
-                    journal().exception("Échec du déplacement de %s vers %s", source, destination)
-                    echoues.append((source, destination, taille))
-                    messages_echec.append(f"• {os.path.basename(source)} : {e}")
+                    reussis.append(e)
+                except Exception as ex:
+                    journal().exception("Échec du déplacement de %s vers %s", e.source, e.destination)
+                    echoues.append(e)
+                    messages_echec.append(f"• {os.path.basename(e.source)} : {ex}")
 
             def _appliquer_resultat():
-                reussis_set = {(s, d) for s, d, _ in reussis}
-                self.file = [(s, d, t) for s, d, t in self.file if (s, d) not in reussis_set]
+                reussis_set = {(r.source, r.destination) for r in reussis}
+                self.file = [el for el in self.file if (el.source, el.destination) not in reussis_set]
                 self._rafraichir_file_widgets()
                 self._maj_barre_espace()
 
