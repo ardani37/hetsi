@@ -301,9 +301,12 @@ class App(ctk.CTk):
             return
 
         # 1. Analyse de risque
+        self.var_etat.set("Analyse du dossier en cours…")
+        self.update_idletasks()
         risques_trouves = risques.analyser(source, destination)
         bloquants = [r for r in risques_trouves if r.niveau == "bloquant"]
         if bloquants:
+            self.var_etat.set("Prêt.")
             messagebox.showerror("hetsi", bloquants[0].message)
             return
         avertissements = [r for r in risques_trouves if r.niveau in ("eleve", "moyen")]
@@ -313,22 +316,31 @@ class App(ctk.CTk):
                 "Déplacement à vérifier",
                 f"{detail}\n\nAjouter quand même à la file ?",
             ):
+                self.var_etat.set("Prêt.")
                 return
 
         # 2. Destination existante : comparer et proposer la reprise
         fusion = False
-        if os.path.exists(destination):
+        if os.path.exists(destination) and not os.path.isdir(destination):
+            self.var_etat.set("Prêt.")
+            messagebox.showerror(
+                "hetsi",
+                f"Un fichier porte déjà ce nom à l'emplacement cible :\n{destination}"
+            )
+            return
+        if os.path.isdir(destination):
             c = comparaison.comparer(source, destination)
             total_src = len(c.identiques) + len(c.manquants) + len(c.differents)
             if c.verdict == "complete":
                 question = (
                     f"La cible contient déjà les {total_src} fichiers de ce dossier.\n\n"
-                    "Finaliser le déplacement (supprimer l'original et créer la jonction) ?"
+                    "hetsi vérifiera la copie, puis supprimera l'original et créera "
+                    "la jonction.\n\nFinaliser le déplacement ?"
                 )
             elif c.verdict == "partielle":
                 question = (
                     f"La cible contient déjà {len(c.identiques)} fichiers sur {total_src}.\n"
-                    f"{len(c.manquants)} manquant(s), {len(c.differents)} à recopier, "
+                    f"{len(c.manquants) + len(c.differents)} fichier(s) à copier, "
                     "aucun fichier étranger.\n\nReprendre et finaliser ?"
                 )
             elif c.verdict == "etrangere":
@@ -342,6 +354,7 @@ class App(ctk.CTk):
                     "Le dossier cible existe mais est vide.\n\nContinuer le déplacement ?"
                 )
             if not messagebox.askyesno("La destination existe déjà", question):
+                self.var_etat.set("Prêt.")
                 return
             fusion = True
 
@@ -349,9 +362,11 @@ class App(ctk.CTk):
         try:
             mover.valider(source, destination, fusion=fusion)
         except mover.ErreurDeplacement as e:
+            self.var_etat.set("Prêt.")
             messagebox.showerror("hetsi", str(e))
             return
 
+        self.var_etat.set("Prêt.")
         taille = self._taille_source_mise_en_cache(source)
         element = ElementFile(source, destination, taille, fusion, tuple(risques_trouves))
         self.file.append(element)
@@ -375,6 +390,23 @@ class App(ctk.CTk):
         nom = os.path.basename(element.source.rstrip("\\"))
         texte_chemin = f"{self._tronquer(element.source)}  →  {self._tronquer(element.destination)}"
 
+        if element.risques:
+            pire = max(element.risques,
+                       key=lambda r: {"moyen": 1, "eleve": 2}.get(r.niveau, 0))
+            texte, couleur = "à vérifier", ("#b45309", "#fbbf24")
+            motif = pire.message
+        elif element.fusion:
+            texte, couleur = "reprise", ("#1d4ed8", "#93c5fd")
+            motif = "Reprise d'un déplacement interrompu."
+        else:
+            texte, couleur = "sûr", ("#15803d", "#4ade80")
+            motif = ""
+        if element.fusion and element.risques:
+            texte = "à vérifier · reprise"
+
+        if motif:
+            texte_chemin = f"{texte_chemin}   —   {motif}"
+
         cadre_txt = ctk.CTkFrame(ligne, fg_color="transparent")
         cadre_txt.pack(side="left", fill="x", expand=True, padx=10, pady=6)
         ctk.CTkLabel(cadre_txt, text=nom, font=ctk.CTkFont(weight="bold"),
@@ -384,16 +416,7 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(ligne, text=self._go(element.taille), width=90).pack(side="left", padx=6)
 
-        if element.fusion:
-            texte, couleur = "reprise", ("#1d4ed8", "#93c5fd")
-        elif element.risques:
-            pire = max(element.risques,
-                       key=lambda r: {"moyen": 1, "eleve": 2}.get(r.niveau, 0))
-            texte, couleur = "à vérifier", ("#b45309", "#fbbf24")
-            ligne._hetsi_motif = pire.message
-        else:
-            texte, couleur = "sûr", ("#15803d", "#4ade80")
-        ctk.CTkLabel(ligne, text=texte, width=80, text_color=couleur,
+        ctk.CTkLabel(ligne, text=texte, width=120, text_color=couleur,
                      font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=4)
 
         btn_suppr = ctk.CTkButton(ligne, text="✕", width=28, height=28,
