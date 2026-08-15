@@ -9,7 +9,7 @@ from typing import NamedTuple
 
 import customtkinter as ctk
 
-from hetsi.core import comparaison, diskinfo, mover, risques
+from hetsi.core import comparaison, diskinfo, mover, processus, risques
 from hetsi.core.history import Historique
 from hetsi.core.journal import journal
 
@@ -461,10 +461,51 @@ class App(ctk.CTk):
             return chemin
         return "…" + chemin[-(longueur - 1):]
 
+    def _liberer_programmes(self):
+        """Détecte les programmes lancés depuis les dossiers de la file et propose
+        de les fermer. Renvoie True si le déplacement peut continuer."""
+        bloquants = []
+        for element in self.file:
+            for p in processus.processus_du_dossier(element.source):
+                bloquants.append((element.source, p))
+        if not bloquants:
+            return True
+
+        lignes = []
+        for src, p in bloquants:
+            nom_dossier = os.path.basename(src.rstrip("\\"))
+            lignes.append(f"• {p.nom} (dans {nom_dossier})")
+        detail = "\n".join(lignes)
+        if not messagebox.askyesno(
+            "Programmes en cours d'exécution",
+            f"Ces programmes utilisent les dossiers à déplacer :\n\n{detail}\n\n"
+            "Fermer ces programmes et continuer ?",
+        ):
+            return False
+
+        self.var_etat.set("Fermeture des programmes…")
+        self.update_idletasks()
+        recalcitrants = [(src, p) for src, p in bloquants
+                         if not processus.fermer(p.pid)]
+        if recalcitrants:
+            noms = ", ".join(p.nom for _, p in recalcitrants)
+            if not messagebox.askyesno(
+                "Programmes non fermés",
+                f"{noms} n'a pas répondu à la demande de fermeture.\n\n"
+                "Forcer la fermeture ? Le travail non enregistré sera perdu.",
+            ):
+                return False
+            for _, p in recalcitrants:
+                processus.fermer(p.pid, force=True)
+        self.var_etat.set("Prêt.")
+        return True
+
     def _tout_deplacer(self):
         if self._occupe:
             return
         if not self.file:
+            return
+        if not self._liberer_programmes():
             return
         recap = "\n".join(f"{e.source}  ->  {e.destination}" for e in self.file)
         if not messagebox.askyesno("Confirmer le déplacement",
