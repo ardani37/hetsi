@@ -494,9 +494,19 @@ class App(ctk.CTk):
                 f"{noms} n'a pas répondu à la demande de fermeture.\n\n"
                 "Forcer la fermeture ? Le travail non enregistré sera perdu.",
             ):
+                self.var_etat.set("Prêt.")
                 return False
-            for _, p in recalcitrants:
-                processus.fermer(p.pid, force=True)
+            survivants = [p for _, p in recalcitrants
+                          if not processus.fermer(p.pid, force=True)]
+            if survivants:
+                self.var_etat.set("Prêt.")
+                noms_survivants = ", ".join(p.nom for p in survivants)
+                messagebox.showerror(
+                    "hetsi",
+                    f"Impossible de fermer : {noms_survivants}.\n\n"
+                    "Ferme ce programme manuellement, puis relance le déplacement."
+                )
+                return False
         self.var_etat.set("Prêt.")
         return True
 
@@ -505,11 +515,11 @@ class App(ctk.CTk):
             return
         if not self.file:
             return
-        if not self._liberer_programmes():
-            return
         recap = "\n".join(f"{e.source}  ->  {e.destination}" for e in self.file)
         if not messagebox.askyesno("Confirmer le déplacement",
                                     f"Déplacer ces dossiers ?\n\n{recap}"):
+            return
+        if not self._liberer_programmes():
             return
         self._occupe = True
         self._definir_etat_boutons(disabled=True)
