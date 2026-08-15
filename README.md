@@ -11,6 +11,9 @@ fonctionner comme si de rien n'était.
 - File d'attente : plusieurs dossiers d'un coup
 - Aperçu de la taille du dossier et de l'espace disque
 - Historique avec annulation en un clic
+- Reprise d'un déplacement interrompu : compare la cible existante et complète ce qui manque
+- Détecte les programmes en cours d'exécution et propose de les fermer
+- Avertit avant un déplacement risqué (dossier système, disque amovible, service Windows)
 - Interface CustomTkinter, mode sombre/clair automatique (suit Windows)
 
 ## Téléchargement
