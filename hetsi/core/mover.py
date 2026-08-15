@@ -29,6 +29,7 @@ def creer_jonction(lien, cible):
     proc = subprocess.run(
         ["cmd", "/c", "mklink", "/J", lien, cible],
         capture_output=True, text=True, encoding="oem", errors="replace",
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"mklink a échoué : {proc.stderr or proc.stdout}")
@@ -43,6 +44,7 @@ def supprimer_jonction(lien):
     proc = subprocess.run(
         ["cmd", "/c", "rmdir", lien],
         capture_output=True, text=True, encoding="oem", errors="replace",
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"rmdir a échoué : {proc.stderr or proc.stdout}")
@@ -54,7 +56,10 @@ def copier(source, destination):
         "robocopy", source, destination,
         "/E", "/COPY:DATS", "/DCOPY:DAT", "/R:1", "/W:1",
     ]
-    proc = subprocess.run(args, capture_output=True, text=True, encoding="oem", errors="replace")
+    proc = subprocess.run(
+        args, capture_output=True, text=True, encoding="oem", errors="replace",
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
     code = proc.returncode
     succes = code < 8
     return ResultatCopie(succes=succes, code=code, message=proc.stdout)
@@ -89,6 +94,10 @@ def valider(source, destination, marge=100 * 1024 * 1024, fusion=False):
     if dst_cmp == src_cmp or dst_cmp.startswith(src_cmp + os.sep):
         raise ErreurDeplacement(
             f"La destination est à l'intérieur de la source : {destination}"
+        )
+    if src_cmp.startswith(dst_cmp + os.sep):
+        raise ErreurDeplacement(
+            f"La source est à l'intérieur de la destination : {destination}"
         )
     if os.path.exists(destination) and not fusion:
         raise ErreurDeplacement(f"La destination existe déjà : {destination}")

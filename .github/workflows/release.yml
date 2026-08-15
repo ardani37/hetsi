@@ -18,7 +18,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Installer les dépendances
-        run: python -m pip install pyinstaller customtkinter
+        run: python -m pip install pyinstaller customtkinter pytest
+      - name: Lancer les tests
+        run: python -m pytest hetsi/ -q
       - name: Construire l'exe
         run: python -m PyInstaller --onefile --windowed --name hetsi --icon hetsi/assets/hetsi.ico --add-data "hetsi/assets/hetsi.ico;hetsi/assets" --collect-all customtkinter main.py
       - name: Publier la Release

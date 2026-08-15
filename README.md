@@ -23,7 +23,8 @@ téléchargez `hetsi.exe`. Aucune installation requise.
 
 > Au lancement, Windows demande les droits administrateur (nécessaires pour
 > déplacer des dossiers de `Program Files` et copier les autorisations).
-> Fermez le logiciel concerné avant de déplacer son dossier.
+> hetsi détecte les programmes en cours d'exécution et propose de les fermer
+> au moment du déplacement.
 
 ## Développement
 

@@ -299,6 +299,11 @@ class App(ctk.CTk):
                 "hetsi", "Le dossier cible ne peut pas être à l'intérieur du dossier à déplacer."
             )
             return
+        if src_cmp.startswith(dst_cmp + os.sep):
+            messagebox.showwarning(
+                "hetsi", "La source est à l'intérieur du dossier cible."
+            )
+            return
 
         # 1. Analyse de risque
         self.var_etat.set("Analyse du dossier en cours…")
@@ -464,11 +469,14 @@ class App(ctk.CTk):
     def _liberer_programmes(self):
         """Détecte les programmes lancés depuis les dossiers de la file et propose
         de les fermer. Renvoie True si le déplacement peut continuer."""
+        self.var_etat.set("Recherche des programmes en cours…")
+        self.update_idletasks()
         bloquants = []
         for element in self.file:
             for p in processus.processus_du_dossier(element.source):
                 bloquants.append((element.source, p))
         if not bloquants:
+            self.var_etat.set("Prêt.")
             return True
 
         lignes = []
@@ -481,6 +489,7 @@ class App(ctk.CTk):
             f"Ces programmes utilisent les dossiers à déplacer :\n\n{detail}\n\n"
             "Fermer ces programmes et continuer ?",
         ):
+            self.var_etat.set("Prêt.")
             return False
 
         self.var_etat.set("Fermeture des programmes…")
@@ -571,11 +580,19 @@ class App(ctk.CTk):
             self.after(0, self._rafraichir_historique)
             self.after(0, self._fin_travail)
 
-    def _annuler(self, index):
+    def _annuler(self, index, fusion=False):
         if self._occupe:
             return
-        if not messagebox.askyesno("Confirmer l'annulation",
-                                   "Ramener ce dossier à son emplacement d'origine ?"):
+        if fusion:
+            question = (
+                "Ce déplacement était une reprise : le dossier cible existait déjà.\n\n"
+                "L'annulation va recopier TOUT le contenu de la cible vers "
+                "l'emplacement d'origine (y compris les fichiers qui ne venaient pas "
+                "de ce dossier), et le dossier cible sera conservé.\n\nContinuer ?"
+            )
+        else:
+            question = "Ramener ce dossier à son emplacement d'origine ?"
+        if not messagebox.askyesno("Confirmer l'annulation", question):
             return
         self._occupe = True
         self._definir_etat_boutons(disabled=True)
@@ -621,7 +638,7 @@ class App(ctk.CTk):
 
             btn_annuler = ctk.CTkButton(
                 ligne, text="Annuler", width=80,
-                command=lambda idx=i: self._annuler(idx))
+                command=lambda idx=i, f=bool(e.get("fusion")): self._annuler(idx, f))
             btn_annuler.pack(side="right", padx=8)
             ligne._hetsi_btn_annuler = btn_annuler
 

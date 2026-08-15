@@ -307,3 +307,26 @@ def test_valider_accepte_un_frere_au_prefixe_commun(tmp_path):
     frere = tmp_path / "App2" / "cible"
     # "App2" partage le préfixe "App" mais n'est pas dans la source : accepté
     mover.valider(str(src), str(frere))
+
+
+def test_valider_refuse_source_dans_la_destination(tmp_path):
+    parent = tmp_path / "Jeux" / "Steam"
+    src = parent / "Steam"
+    src.mkdir(parents=True)
+    (src / "a.txt").write_bytes(b"x")
+    # destination = le parent de la source
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(parent))
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.valider(str(src), str(parent), fusion=True)
+
+
+def test_deplacer_refuse_source_dans_la_destination_sans_perte(tmp_path):
+    parent = tmp_path / "Jeux" / "Steam"
+    src = parent / "Steam"
+    src.mkdir(parents=True)
+    (src / "a.txt").write_bytes(b"precieux")
+    with pytest.raises(mover.ErreurDeplacement):
+        mover.deplacer(str(src), str(parent), fusion=True)
+    assert (src / "a.txt").read_bytes() == b"precieux"
+    assert mover.est_jonction(str(src)) is False

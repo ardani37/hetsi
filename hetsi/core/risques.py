@@ -31,7 +31,10 @@ def _type_lecteur(racine):
 
 def _services_du_dossier(dossier):
     """Noms des services Windows dont l'exécutable est dans `dossier`."""
-    motif = dossier.rstrip("\\").replace("'", "''") + "\\*"
+    motif = (dossier.rstrip("\\")
+             .replace("'", "''")
+             .replace("[", "`[")
+             .replace("]", "`]")) + "\\*"
     script = (
         "Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '*" + motif + "*' } "
         "| Select-Object Name | ConvertTo-Json -Compress"

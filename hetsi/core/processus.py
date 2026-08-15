@@ -1,7 +1,6 @@
 """Détection et fermeture des programmes lancés depuis un dossier."""
 import json
 import subprocess
-import time
 from dataclasses import dataclass
 
 
@@ -18,7 +17,7 @@ def _powershell(script):
         proc = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True, text=True, encoding="oem", errors="replace",
-            timeout=30,
+            timeout=30, creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -83,16 +82,17 @@ def _existe(pid):
 def fermer(pid, force=False, attente=3.0):
     """Ferme le processus `pid`. Renvoie True s'il a disparu avant `attente`."""
     pid = int(pid)
+    millisecondes = int(attente * 1000)
     if force:
-        _powershell(f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue")
+        _powershell(
+            f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
+            f"if ($p) {{ Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue; "
+            f"$null = $p.WaitForExit({millisecondes}) }}"
+        )
     else:
         _powershell(
             f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
-            "if ($p) { $null = $p.CloseMainWindow() }"
+            f"if ($p) {{ $null = $p.CloseMainWindow(); "
+            f"$null = $p.WaitForExit({millisecondes}) }}"
         )
-    limite = time.monotonic() + attente
-    while time.monotonic() < limite:
-        if not _existe(pid):
-            return True
-        time.sleep(0.25)
     return not _existe(pid)
